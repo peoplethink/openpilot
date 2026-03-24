@@ -56,7 +56,7 @@ class LateralPlanner:
     self.dynamic_lane_profile = int(self.params.get("DynamicLaneProfile", encoding="utf8") or "0")
     self.dynamic_lane_profile_status = False
     self.dynamic_lane_profile_status_buffer = False
-    self.second = 0.0
+    # ↑ self.second = 0.0 제거 (커밋 반영)
 
   def reset_mpc(self, x0=np.zeros(4)):
     self.x0 = x0
@@ -68,11 +68,9 @@ class LateralPlanner:
       self.use_lanelines = self.params.get_bool('UseLanelines')
       self.last_params_update = t
 
-    self.second += DT_MDL
-    if self.second > 1.0:
-      self.dynamic_lane_profile = int(self.params.get("DynamicLaneProfile", encoding="utf8") or "0")
-      self.dynamic_lane_profile_enabled = self.params.get_bool("DynamicLaneProfileToggle")
-      self.second = 0.0
+    # ↓ 1초 타이머 블록 제거 후 매 업데이트마다 바로 읽도록 변경 (커밋 반영)
+    self.dynamic_lane_profile = int(self.params.get("DynamicLaneProfile", encoding='utf8') or "0")
+    self.dynamic_lane_profile_enabled = self.params.get_bool("DynamicLaneProfileToggle")
 
     # clip speed , lateral planning is not possible at 0 speed
     measured_curvature = sm['controlsState'].curvature
