@@ -185,6 +185,8 @@ class Controls:
     self.desired_curvature = 0.0
     self.desired_curvature_rate = 0.0
     self.experimental_mode = False
+    # [DEC] Dynamic Experimental Control 초기값
+    self.dynamic_experimental_control = False
 
     # scc smoother
     self.is_cruise_enabled = False
@@ -586,7 +588,8 @@ class Controls:
           else:
             self.state = State.enabled
           self.current_alert_types.append(ET.ENABLE)
-          self.v_cruise_helper.initialize_v_cruise(CS, self.experimental_mode)
+          # [DEC] dynamic_experimental_control 인자 추가
+          self.v_cruise_helper.initialize_v_cruise(CS, self.experimental_mode, self.dynamic_experimental_control)
 
     # Check if openpilot is engaged and actuators are enabled
     self.enabled = self.state in ENABLED_STATES
@@ -898,6 +901,8 @@ class Controls:
     self.prof.checkpoint("Ratekeeper", ignore=True)
 
     self.experimental_mode = Params().get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
+    # [DEC] DynamicExperimentalControl 파라미터 매 스텝 갱신
+    self.dynamic_experimental_control = self.params.get_bool("DynamicExperimentalControl")
 
     # Sample data from sockets and get a carState
     CS = self.data_sample()
