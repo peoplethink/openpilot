@@ -378,25 +378,29 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
     if (acceleration.getZ().size() > 16) {
       acceleration_future = acceleration.getX()[16];  // 2.5 seconds
     }
-    start_hue = 60;
+    if (scene.dynamic_lane_profile_status) {
+      start_hue = 60;
       // speed up: 120, slow down: 0
       end_hue = fmax(fmin(start_hue + acceleration_future * 45, 148), 0);
-	  
+    } else {
+      start_hue = 240;
+      // speed up: 300, slow down: 180
+      end_hue = fmin(fmax(start_hue + acceleration_future * 45, 180), 328);
+    }
     // FIXME: painter.drawPolygon can be slow if hue is not rounded
     end_hue = int(end_hue * 100 + 0.5) / 100;
 
     bg.setColorAt(0.0, QColor::fromHslF(start_hue / 360., 0.97, 0.56, 0.7));
     bg.setColorAt(0.5, QColor::fromHslF(end_hue / 360., 1.0, 0.68, 0.35));
     bg.setColorAt(1.0, QColor::fromHslF(end_hue / 360., 1.0, 0.68, 0.0));
-  } else {
+  } else if (scene.dynamic_lane_profile_status) {
     bg.setColorAt(0.0, QColor::fromHslF(148 / 360., 0.94, 0.51, 0.7));
     bg.setColorAt(0.5, QColor::fromHslF(112 / 360., 1.0, 0.68, 0.35));
     bg.setColorAt(1.0, QColor::fromHslF(112 / 360., 1.0, 0.68, 0.0));
-  }
-} else {
-    bg.setColorAt(0.0, whiteColor(102));
-    bg.setColorAt(0.5, whiteColor(89));
-    bg.setColorAt(1.0, whiteColor(0));
+  } else {
+    bg.setColorAt(0.0, QColor::fromHslF(240 / 360., 0.94, 0.51, 0.4));
+    bg.setColorAt(0.5, QColor::fromHslF(204 / 360., 1.0, 0.68, 0.35));
+    bg.setColorAt(1.0, QColor::fromHslF(204 / 360., 1.0, 0.68, 0.0));
   }
 
   if (!scene.dynamic_lane_profile_status) {
@@ -410,7 +414,7 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
   }
 
   painter.setBrush(bg);
-  painter.drawPolygon(scene.track_vertices.v, scene.track_vertices.cnt);
+  painter.drawPolygon(scene.track_vertices);
 
   painter.restore();
 }
