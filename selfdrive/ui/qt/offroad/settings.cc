@@ -236,6 +236,12 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
           openpilot defaults to the car's built-in ACC instead of openpilot's longitudinal control on this car. Enable this to switch to openpilot longitudinal control.",
       "../assets/offroad/icon_speed_limit.png",
     },
+    {
+      "DynamicExperimentalControlToggle",
+      "Enable Dynamic Experimental Control",
+      "Enable toggle to allow the model to determine when to use openpilot ACC or openpilot End to End Longitudinal.",
+      "../assets/offroad/icon_speed_limit.png",
+    },
 #ifdef ENABLE_MAPS
     {
       "NavSettingTime24h",
