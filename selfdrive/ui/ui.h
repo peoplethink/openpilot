@@ -99,8 +99,8 @@ typedef struct UIScene {
   // modelV2
   float lane_line_probs[4];
   float road_edge_stds[2];
-  line_vertices_data track_vertices;
-  line_vertices_data track_edge_vertices;
+  QPolygonF track_vertices;       // line_vertices_data → QPolygonF (drawPolygon 직접 호출)
+  QPolygonF track_edge_vertices;  // line_vertices_data → QPolygonF (drawPolygon 직접 호출)
   line_vertices_data lane_line_vertices[4];
   line_vertices_data road_edge_vertices[2];
   line_vertices_data lane_barrier_vertices[2]; // blind spot visualization
