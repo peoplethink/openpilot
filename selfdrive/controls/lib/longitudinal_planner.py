@@ -135,7 +135,7 @@ class LongitudinalPlanner:
     else:
       accel_limits = [MIN_ACCEL, MAX_ACCEL]
       accel_limits_turns = [MIN_ACCEL, MAX_ACCEL]
-    
+
     if reset_state:
       self.v_desired_filter.x = v_ego
       # Clip aEgo to cruise limits to prevent large accelerations when becoming active
@@ -193,5 +193,10 @@ class LongitudinalPlanner:
 
     longitudinalPlan.solverExecutionTime = self.mpc.solve_time
     longitudinalPlan.e2eBlended = self.mpc.mode
+
+    longitudinalPlan.visionTurnControllerState = self.vision_turn_controller.state
+    longitudinalPlan.visionTurnSpeed = float(self.vision_turn_controller.v_turn)
+    longitudinalPlan.visionCurrentLatAcc = float(self.vision_turn_controller.current_lat_acc)
+    longitudinalPlan.visionMaxPredLatAcc = float(self.vision_turn_controller.max_pred_lat_acc)
 
     pm.send('longitudinalPlan', plan_send)
