@@ -65,6 +65,16 @@ def manager_init() -> None:
     ("NewRadarInterface", "0"),
     ("WideCameraOnly", "0"),       # plannerd.py 크래시 수정
     ("AutoLaneChangeTimer", "0"),  # controlsd.py 크래시 수정
+
+    # Dynamic Lane Profile
+    ("UseLanelines", "0"),
+    ("DynamicLaneProfile", "2"),
+    ("DynamicLaneProfileToggle", "1"),
+    ("VisionCurveLaneless", "1"),
+
+    # Dynamic Experimental Control
+    ("DynamicExperimentalControl", "0"),
+    ("DynamicExperimentalControlToggle", "0"),
   ]
   if not PC:
     default_params.append(("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')))
