@@ -877,6 +877,18 @@ struct LongitudinalPlan @0xe00b5b3eba12876c {
 
   solverExecutionTime @35 :Float32;
   e2eBlended @36 :Text;
+  visionTurnControllerState @37 :VisionTurnControllerState;
+  visionTurnSpeed @38 :Float32;
+  visionCurrentLatAcc @39 :Float32;
+  visionMaxPredLatAcc @40 :Float32;
+
+  enum VisionTurnControllerState {
+    disabled @0;
+    standstill @1;
+    waiting @2;
+    adapting @3;
+    active @4;
+  }
 
   enum LongitudinalPlanSource {
     cruise @0;
