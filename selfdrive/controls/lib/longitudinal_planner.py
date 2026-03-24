@@ -192,5 +192,6 @@ class LongitudinalPlanner:
     longitudinalPlan.fcw = self.fcw
 
     longitudinalPlan.solverExecutionTime = self.mpc.solve_time
+    longitudinalPlan.e2eBlended = self.mpc.mode
 
     pm.send('longitudinalPlan', plan_send)
