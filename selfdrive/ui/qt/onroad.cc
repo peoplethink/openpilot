@@ -299,11 +299,20 @@ void NvgWindow::updateState(const UIState &s) {
     setProperty("experimentalMode", cs.getExperimentalMode());
   }
 
+  // [DEC] mpcMode 읽기: longitudinalPlan의 e2eBlended 필드
+  if (sm.updated("longitudinalPlan")) {
+    const auto lp = sm["longitudinalPlan"].getLongitudinalPlan();
+    QString mode = QString::fromStdString(lp.getE2eBlended());
+    // "blended" → "Blended", 그 외 → 대문자 (e.g. "ACC")
+    mpcMode = (mode == "blended")
+        ? mode.replace(0, 1, mode[0].toUpper())
+        : mode.toUpper();
+  }
+
   // blind spot state sync
   auto car_state = sm["carState"].getCarState();
   setProperty("left_blindspot",  car_state.getLeftBlindspot());
   setProperty("right_blindspot", car_state.getRightBlindspot());
-
 }
 
 void NvgWindow::updateFrameMat(int w, int h) {
@@ -658,6 +667,61 @@ void NvgWindow::drawText2(QPainter &p, int x, int y, int flags, const QString &t
   p.drawText(QRect(x, y, rect.width()+1, rect.height()), flags, text);
 }
 
+// [DEC] DEC 상태 표시 함수
+void NvgWindow::drawDecStatus(QPainter &p) {
+  UIState *s = uiState();
+  const SubMaster &sm = *(s->sm);
+
+  // DEC 토글이 꺼져 있으면 표시 안 함
+  if (!s->scene.dynamic_experimental_control_toggle) return;
+
+  p.save();
+
+  bool cruise_enabled = sm["carState"].getCarState().getCruiseState().getEnabled();
+  bool dec_enabled    = s->scene.dynamic_experimental_control_toggle &&
+                        s->scene.dynamic_experimental_control;
+  bool exp_mode       = sm["controlsState"].getControlsState().getExperimentalMode();
+
+  // 활성 상태이면 초록, 아니면 흰색
+  QColor dot_color = (cruise_enabled && dec_enabled) ? QColor(0x4b, 0xff, 0x66) : QColor(0xff, 0xff, 0xff);
+
+  // 표시 위치: 우측 상단 engage 아이콘 아래
+  const int x = width() - 120;
+  const int y = radius + int(bdr_s * 1.5) + 80;
+  const int dot_r = 14;
+
+  // 배경 원
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(0, 0, 0, 120));
+  p.drawEllipse(x - dot_r - 2, y - dot_r - 2, (dot_r + 2) * 2, (dot_r + 2) * 2);
+
+  // 상태 색상 원
+  p.setBrush(dot_color);
+  p.drawEllipse(x - dot_r, y - dot_r, dot_r * 2, dot_r * 2);
+
+  // 텍스트: "DEC: ACC" / "DEC: Blended" / "DEC: Inactive" / "DEC: OFF"
+  QString dec_text;
+  if (!dec_enabled) {
+    dec_text = "DEC: OFF";
+  } else if (!exp_mode) {
+    dec_text = "DEC: Inactive";
+  } else {
+    dec_text = "DEC: " + mpcMode;
+  }
+
+  configFont(p, "Open Sans", 36, "Bold");
+
+  // 그림자
+  p.setPen(QColor(0, 0, 0, 180));
+  p.drawText(x - 90 + 2, y + dot_r + 38, dec_text);
+
+  // 본문
+  p.setPen(QColor(0xff, 0xff, 0xff, 230));
+  p.drawText(x - 90, y + dot_r + 36, dec_text);
+
+  p.restore();
+}
+
 void NvgWindow::drawHud(QPainter &p, const cereal::ModelDataV2::Reader &model) {
 
   p.setRenderHint(QPainter::Antialiasing);
@@ -692,6 +756,7 @@ void NvgWindow::drawHud(QPainter &p, const cereal::ModelDataV2::Reader &model) {
   drawThermal(p);
   //drawTurnSignals(p);
   drawGpsStatus(p);
+  drawDecStatus(p);  // [DEC] DEC 상태 표시
 
   if(s->show_debug && width() > 1200)
     drawDebugText(p);
@@ -1371,6 +1436,11 @@ void NvgWindow::drawDebugText(QPainter &p) {
 
   y += height;
   str.sprintf("Lead: %.1f/%.1f/%.1f\n", radar_dist, vision_dist, (radar_dist - vision_dist));
+  p.drawText(text_x, y, str);
+
+  // [DEC] DEC mpcMode 디버그 표시
+  y += height;
+  str.sprintf("DEC mode: %s\n", mpcMode.toStdString().c_str());
   p.drawText(text_x, y, str);
 
   p.restore();
