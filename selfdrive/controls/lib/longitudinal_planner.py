@@ -13,6 +13,8 @@ from selfdrive.controls.lib.longcontrol import LongCtrlState
 from selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import LongitudinalMpc, MIN_ACCEL, MAX_ACCEL
 from selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDXS as T_IDXS_MPC
 from selfdrive.controls.lib.drive_helpers import V_CRUISE_MAX, CONTROL_N, get_speed_error
+# [DEC] DynamicExperimentalController 추가
+from selfdrive.controls.lib.dynamic_experimental_controller import DynamicExperimentalController
 from selfdrive.swaglog import cloudlog
 
 LON_MPC_STEP = 0.2  # first step is 0.2s
@@ -52,6 +54,8 @@ class LongitudinalPlanner:
     self.param_read_counter = 0
 
     self.mpc = LongitudinalMpc()
+    # [DEC] DynamicExperimentalController 인스턴스 생성
+    self.dynamic_experimental_controller = DynamicExperimentalController()
     self.read_param()
 
     self.fcw = False
@@ -67,9 +71,13 @@ class LongitudinalPlanner:
     self.use_cluster_speed = Params().get_bool('UseClusterSpeed')
 
   def read_param(self):
-    e2e = self.params.get_bool('ExperimentalMode') and self.CP.openpilotLongitudinalControl
-    self.mpc.mode = 'blended' if e2e else 'acc'
-    
+    # [DEC] DEC 활성화 여부 갱신 (AttributeError 대비 방어 코드 포함)
+    try:
+      self.dynamic_experimental_controller.set_enabled(self.params.get_bool("DynamicExperimentalControl") and
+                                                       self.params.get_bool("DynamicExperimentalControlToggle"))
+    except AttributeError:
+      self.dynamic_experimental_controller = DynamicExperimentalController()
+
   def parse_model(self, model_msg):
     if (len(model_msg.position.x) == 33 and
        len(model_msg.velocity.x) == 33 and
@@ -89,6 +97,15 @@ class LongitudinalPlanner:
     if self.param_read_counter % 100 == 0 and read:
       self.read_param()
     self.param_read_counter += 1
+
+    # [DEC] DEC가 활성화된 경우 DEC가 mpc.mode 결정, 아니면 기존 방식 유지
+    if self.dynamic_experimental_controller.is_enabled():
+      self.mpc.mode = self.dynamic_experimental_controller.get_mpc_mode(
+        'blended' if sm['controlsState'].experimentalMode else 'acc',
+        self.CP.radarUnavailable, sm['carState'], sm['radarState'].leadOne, sm['modelV2'])
+    else:
+      e2e = self.params.get_bool('ExperimentalMode') and self.CP.openpilotLongitudinalControl
+      self.mpc.mode = 'blended' if e2e else 'acc'
 
     v_ego = sm['carState'].vEgo
 
