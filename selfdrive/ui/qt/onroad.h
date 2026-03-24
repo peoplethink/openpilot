@@ -70,6 +70,9 @@ protected:
   // ChevronInfo: fade alpha for lead status overlay
   float lead_status_alpha = 0.0f;
 
+  // [DEC] Dynamic Experimental Control mpc mode string
+  QString mpcMode;
+
   FirstOrderFilter fps_filter;
   FirstOrderFilter accel_filter;
 
@@ -108,6 +111,7 @@ protected:
   void drawTurnSignals(QPainter &p);
   void drawGpsStatus(QPainter &p);
   void drawDebugText(QPainter &p);
+  void drawDecStatus(QPainter &p);  // [DEC] DEC 상태 표시
   void drawHud(QPainter &p, const cereal::ModelDataV2::Reader &model);
 };
 
