@@ -212,6 +212,9 @@ void ui_update_params(UIState *s) {
   s->scene.experimental_mode = params.getBool("ExperimentalMode");
   s->show_debug = params.getBool("ShowDebugUI");
   s->lat_control = std::string(Params().get("LateralControl"));
+  // [DEC] DEC 토글 및 활성화 상태 파라미터 갱신
+  s->scene.dynamic_experimental_control_toggle = params.getBool("DynamicExperimentalControlToggle");
+  s->scene.dynamic_experimental_control = params.getBool("DynamicExperimentalControl");
 }
 
 void UIState::updateStatus() {
@@ -248,6 +251,7 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "pandaStates", "carParams", "driverMonitoringState", "sensorEvents", "carState", "liveLocationKalman",
     "wideRoadCameraState",
     "gpsLocationExternal", "carControl", "liveParameters", "roadLimitSpeed", "lateralPlan",
+    "longitudinalPlan",  // [DEC] e2eBlended 읽기 위해 추가
   });
 
   Params params;
