@@ -99,7 +99,6 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ControlsReady", CLEAR_ON_MANAGER_START | CLEAR_ON_IGNITION_ON},
     {"CurrentRoute", CLEAR_ON_MANAGER_START | CLEAR_ON_IGNITION_ON},
     {"DisablePowerDown", PERSISTENT},
-    {"ExperimentalLongitudinalEnabled", PERSISTENT}, // WARNING: THIS MAY DISABLE AEB
     {"DisableUpdates", PERSISTENT},
     {"DisengageOnAccelerator", PERSISTENT},
     {"DongleId", PERSISTENT},
@@ -209,6 +208,10 @@ std::unordered_map<std::string, uint32_t> keys = {
 
     {"KeepSteeringTurnSignals", PERSISTENT},
     {"HapticFeedbackWhenSpeedCamera", PERSISTENT},
+
+    {"VisionCurveLaneless", PERSISTENT},
+    {"DynamicExperimentalControl", PERSISTENT},
+    {"DynamicExperimentalControlToggle", PERSISTENT},
 
     {"SoftRestartTriggered", CLEAR_ON_MANAGER_START},
 };
