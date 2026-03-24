@@ -17,8 +17,8 @@ from selfdrive.version import is_tested_branch
 from selfdrive.boardd.boardd import can_list_to_can_capnp
 from selfdrive.car.car_helpers import get_car, get_startup_event, get_one_can
 from selfdrive.controls.lib.lane_planner import CAMERA_OFFSET
-from selfdrive.controls.lib.drive_helpers import V_CRUISE_INITIAL, update_v_cruise, initialize_v_cruise
-from selfdrive.controls.lib.drive_helpers import get_lag_adjusted_curvature
+# [COMMIT] VCruiseHelper로 통합, V_CRUISE_INITIAL/update_v_cruise/initialize_v_cruise 제거
+from selfdrive.controls.lib.drive_helpers import VCruiseHelper, get_lag_adjusted_curvature
 from selfdrive.controls.lib.latcontrol import LatControl
 from selfdrive.controls.lib.longcontrol import LongControl
 from selfdrive.controls.lib.latcontrol_pid import LatControlPID
@@ -52,6 +52,7 @@ Desire = log.LateralPlan.Desire
 LaneChangeState = log.LateralPlan.LaneChangeState
 LaneChangeDirection = log.LateralPlan.LaneChangeDirection
 EventName = car.CarEvent.EventName
+# [COMMIT] ButtonEvent는 drive_helpers.py 로 이동됨 — SCC smoother 호환을 위해 여기서도 유지
 ButtonEvent = car.CarState.ButtonEvent
 ButtonType = car.CarState.ButtonEvent.Type
 SafetyModel = car.CarParams.SafetyModel
@@ -169,9 +170,9 @@ class Controls:
     self.active = False
     self.can_rcv_error = False
     self.soft_disable_timer = 0
-    self.v_cruise_kph = V_CRUISE_INITIAL
-    self.v_cruise_cluster_kph = V_CRUISE_INITIAL
-    self.v_cruise_kph_last = 0
+    # [COMMIT] v_cruise_kph / v_cruise_cluster_kph / v_cruise_kph_last / button_timers
+    #          → VCruiseHelper 로 이관. SCC Smoother 호환은 아래 property 로 처리.
+    self.v_cruise_helper = VCruiseHelper(self.CP)
     self.mismatch_counter = 0
     self.cruise_mismatch_counter = 0
     self.can_rcv_error_counter = 0
@@ -181,7 +182,6 @@ class Controls:
     self.events_prev = []
     self.current_alert_types = [ET.PERMANENT]
     self.logged_comm_issue = False
-    self.button_timers = {ButtonEvent.Type.decelCruise: 0, ButtonEvent.Type.accelCruise: 0}
     self.last_actuators = car.CarControl.Actuators.new_message()
     self.steer_limited = False
     self.desired_curvature = 0.0
@@ -234,6 +234,44 @@ class Controls:
     self.rk = Ratekeeper(100, print_delay_threshold=None)
     self.prof = Profiler(False)  # off by default
 
+  # -------------------------------------------------------------------------
+  # [COMMIT] SCC Smoother 호환성 property
+  # SccSmoother.update_cruise_buttons(self, CS, ...) 가 Controls 인스턴스의
+  # v_cruise_kph / v_cruise_cluster_kph / v_cruise_kph_last / button_timers 를
+  # 직접 읽고 쓰므로, VCruiseHelper 로 위임하는 property 를 제공한다.
+  # -------------------------------------------------------------------------
+  @property
+  def v_cruise_kph(self):
+    return self.v_cruise_helper.v_cruise_kph
+
+  @v_cruise_kph.setter
+  def v_cruise_kph(self, value):
+    self.v_cruise_helper.v_cruise_kph = value
+
+  @property
+  def v_cruise_cluster_kph(self):
+    return self.v_cruise_helper.v_cruise_cluster_kph
+
+  @v_cruise_cluster_kph.setter
+  def v_cruise_cluster_kph(self, value):
+    self.v_cruise_helper.v_cruise_cluster_kph = value
+
+  @property
+  def v_cruise_kph_last(self):
+    return self.v_cruise_helper.v_cruise_kph_last
+
+  @v_cruise_kph_last.setter
+  def v_cruise_kph_last(self, value):
+    self.v_cruise_helper.v_cruise_kph_last = value
+
+  @property
+  def button_timers(self):
+    return self.v_cruise_helper.button_timers
+
+  @button_timers.setter
+  def button_timers(self, value):
+    self.v_cruise_helper.button_timers = value
+
   def update_events(self, CS):
     """Compute carEvents from carState"""
 
@@ -249,9 +287,9 @@ class Controls:
       self.events.add(EventName.controlsInitializing)
       return
 
-    # Block resume if cruise never previously enabled
+    # [COMMIT] Block resume if cruise never previously enabled
     resume_pressed = any(be.type in (ButtonType.accelCruise, ButtonType.resumeCruise) for be in CS.buttonEvents)
-    if not self.CP.pcmCruise and self.v_cruise_kph == V_CRUISE_INITIAL and resume_pressed:
+    if not self.CP.pcmCruise and not self.v_cruise_helper.v_cruise_initialized and resume_pressed:
       self.events.add(EventName.resumeBlocked)
 
     if CS.gasPressed:
@@ -476,11 +514,19 @@ class Controls:
   def state_transition(self, CS):
     """Compute conditional state transitions and execute actions on state transitions"""
 
-    self.v_cruise_kph_last = self.v_cruise_kph
+    # [COMMIT] v_cruise_kph_last 갱신은 VCruiseHelper.update_v_cruise() 내부에서 처리
+    # self.v_cruise_kph_last = self.v_cruise_kph  ← 제거
 
     self.CP.pcmCruise = self.CI.CP.pcmCruise
 
+    # SCC Smoother 가 버튼 이벤트 및 cruise 속도를 처리한다.
+    # (v_cruise_kph property 를 통해 VCruiseHelper 에 반영됨)
     SccSmoother.update_cruise_buttons(self, CS, self.CP.openpilotLongitudinalControl)
+
+    # [COMMIT] VCruiseHelper 를 통한 v_cruise 갱신
+    # pcmCruise 모드: CS.cruiseState.speed 에서 읽음
+    # non-pcm 모드:   버튼 타이머 기반 속도 조절 (SCC Smoother 와 병행)
+    self.v_cruise_helper.update_v_cruise(CS, self.enabled, self.is_metric)
 
     # decrement the soft disable timer at every step, as it's reset on
     # entrance in SOFT_DISABLING state
@@ -558,9 +604,8 @@ class Controls:
           else:
             self.state = State.enabled
           self.current_alert_types.append(ET.ENABLE)
-          if not self.CP.pcmCruise:
-            self.v_cruise_kph = initialize_v_cruise(CS.vEgo, CS.buttonEvents, self.v_cruise_kph_last)
-            self.v_cruise_cluster_kph = self.v_cruise_kph
+          # [COMMIT] initialize_v_cruise → VCruiseHelper.initialize_v_cruise(CS)
+          self.v_cruise_helper.initialize_v_cruise(CS)
 
     # Check if openpilot is engaged and actuators are enabled
     self.enabled = self.state in ENABLED_STATES
@@ -607,21 +652,15 @@ class Controls:
       self.LoC.reset(v_pid=CS.vEgo)
 
     # [FIX] openpilot 롱컨(ExperimentalMode 포함) 시에는 차량 SCC enabledAcc 상태와 무관하게 동작해야 함.
-    # 기존: if not CS.cruiseState.enabledAcc: self.LoC.reset(v_pid=CS.vEgo)
-    # → openpilotLongitudinalControl=True 일 때도 무조건 리셋되어 가속 불가 문제 발생.
-    # 수정: SCC 롱컨(비openpilot) 모드일 때만 enabledAcc 기준으로 리셋.
     if not self.CP.openpilotLongitudinalControl and not CS.cruiseState.enabledAcc:
       self.LoC.reset(v_pid=CS.vEgo)
 
     if not self.joystick_mode:
-      # accel PID loop
-      pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, CS.vEgo, self.v_cruise_kph * CV.KPH_TO_MS)
+      # [COMMIT] accel PID loop — v_cruise_kph → v_cruise_helper.v_cruise_kph
+      pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, CS.vEgo, self.v_cruise_helper.v_cruise_kph * CV.KPH_TO_MS)
       t_since_plan = (self.sm.frame - self.sm.rcv_frame['longitudinalPlan']) * DT_CTRL
 
       # [FIX] openpilot 롱컨(ExperimentalMode) 시 enabledAcc 조건 제거.
-      # 기존: self.LoC.update(CC.longActive and CS.cruiseState.enabledAcc, ...)
-      # → enabledAcc=False 이면 longActive=True 여도 accel 계산이 0으로 고정됨.
-      # 수정: openpilotLongitudinalControl이면 CC.longActive만으로 판단.
       if self.CP.openpilotLongitudinalControl:
         actuators.accel = self.LoC.update(
           CC.longActive, CS, long_plan, pid_accel_limits, t_since_plan,
@@ -693,15 +732,7 @@ class Controls:
 
     return CC, lac_log
 
-  def update_button_timers(self, buttonEvents):
-    # increment timer for buttons still pressed
-    for k in self.button_timers:
-      if self.button_timers[k] > 0:
-        self.button_timers[k] += 1
-
-    for b in buttonEvents:
-      if b.type.raw in self.button_timers:
-        self.button_timers[b.type.raw] = 1 if b.pressed else 0
+  # [COMMIT] update_button_timers 는 VCruiseHelper.update_button_timers() 로 이관됨 — 제거
 
   def publish_logs(self, CS, start_time, CC, lac_log):
     """Send actuators and hud commands to the car, send controlsstate and MPC logging"""
@@ -724,7 +755,8 @@ class Controls:
       CC.cruiseControl.resume = self.enabled and CS.cruiseState.standstill and speeds[-1] > 0.1
 
     hudControl = CC.hudControl
-    hudControl.setSpeed = float(self.v_cruise_cluster_kph * CV.KPH_TO_MS)
+    # [COMMIT] v_cruise_cluster_kph → v_cruise_helper.v_cruise_cluster_kph
+    hudControl.setSpeed = float(self.v_cruise_helper.v_cruise_cluster_kph * CV.KPH_TO_MS)
     hudControl.speedVisible = self.enabled
     hudControl.lanesVisible = self.enabled
     hudControl.leadVisible = self.sm['longitudinalPlan'].hasLead
@@ -814,8 +846,9 @@ class Controls:
     controlsState.engageable = not self.events.any(ET.NO_ENTRY)
     controlsState.longControlState = self.LoC.long_control_state
     controlsState.vPid = float(self.LoC.v_pid)
-    controlsState.vCruise = float(self.applyMaxSpeed if self.CP.openpilotLongitudinalControl else self.v_cruise_kph)
-    controlsState.vCruiseCluster = float(self.v_cruise_cluster_kph)
+    # [COMMIT] v_cruise_kph / v_cruise_cluster_kph → v_cruise_helper 경유
+    controlsState.vCruise = float(self.applyMaxSpeed if self.CP.openpilotLongitudinalControl else self.v_cruise_helper.v_cruise_kph)
+    controlsState.vCruiseCluster = float(self.v_cruise_helper.v_cruise_cluster_kph)
     controlsState.upAccelCmd = float(self.LoC.pid.p)
     controlsState.uiAccelCmd = float(self.LoC.pid.i)
     controlsState.ufAccelCmd = float(self.LoC.pid.f)
@@ -915,7 +948,7 @@ class Controls:
     self.publish_logs(CS, start_time, CC, lac_log)
     self.prof.checkpoint("Sent")
 
-    self.update_button_timers(CS.buttonEvents)
+    # [COMMIT] update_button_timers 는 VCruiseHelper 내부에서 update_v_cruise() 호출 시 처리됨 — 제거
     self.CS_prev = CS
 
   def controlsd_thread(self):
