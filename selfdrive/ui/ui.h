@@ -115,6 +115,9 @@ typedef struct UIScene {
   int dynamic_lane_profile;
   bool dynamic_lane_profile_status;
   bool dynamic_lane_profile_toggle;
+
+  // [DEC] Dynamic Experimental Control
+  bool dynamic_experimental_control_toggle, dynamic_experimental_control;
 } UIScene;
 
 class UIState : public QObject {
