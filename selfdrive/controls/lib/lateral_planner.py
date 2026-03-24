@@ -12,6 +12,8 @@ import cereal.messaging as messaging
 from cereal import log
 from common.params import Params
 
+LaneChangeState = log.LateralPlan.LaneChangeState
+
 TRAJECTORY_SIZE = 33
 CAMERA_OFFSET = -0.06
 
@@ -56,7 +58,8 @@ class LateralPlanner:
     self.dynamic_lane_profile = int(self.params.get("DynamicLaneProfile", encoding="utf8") or "0")
     self.dynamic_lane_profile_status = False
     self.dynamic_lane_profile_status_buffer = False
-    # ↑ self.second = 0.0 제거 (커밋 반영)
+
+    self.vision_curve_laneless = self.params.get_bool("VisionCurveLaneless")
 
   def reset_mpc(self, x0=np.zeros(4)):
     self.x0 = x0
@@ -68,9 +71,9 @@ class LateralPlanner:
       self.use_lanelines = self.params.get_bool('UseLanelines')
       self.last_params_update = t
 
-    # ↓ 1초 타이머 블록 제거 후 매 업데이트마다 바로 읽도록 변경 (커밋 반영)
     self.dynamic_lane_profile = int(self.params.get("DynamicLaneProfile", encoding='utf8') or "0")
     self.dynamic_lane_profile_enabled = self.params.get_bool("DynamicLaneProfileToggle")
+    self.vision_curve_laneless = self.params.get_bool("VisionCurveLaneless")
 
     # clip speed , lateral planning is not possible at 0 speed
     measured_curvature = sm['controlsState'].curvature
@@ -100,7 +103,7 @@ class LateralPlanner:
       self.LP.rll_prob *= self.DH.lane_change_ll_prob
 
     # Calculate final driving path and set MPC costs
-    if self.use_lanelines and not self.get_dynamic_lane_profile():
+    if self.use_lanelines and not self.get_dynamic_lane_profile(sm['longitudinalPlan']):
       d_path_xyz = self.LP.get_d_path(self.v_ego, self.t_idxs, self.path_xyz)
       self.dynamic_lane_profile_status = False
     else:
@@ -146,7 +149,7 @@ class LateralPlanner:
     else:
       self.solution_invalid_cnt = 0
 
-  def get_dynamic_lane_profile(self):
+  def get_dynamic_lane_profile(self, longitudinal_plan):
     if not self.dynamic_lane_profile_enabled:
       return True
     elif self.dynamic_lane_profile == 1:
@@ -154,12 +157,19 @@ class LateralPlanner:
     elif self.dynamic_lane_profile == 0:
       return False
     elif self.dynamic_lane_profile == 2:
+      # laneless while lane change in progress
+      if self.DH.lane_change_state in (LaneChangeState.laneChangeStarting, LaneChangeState.laneChangeFinishing):
+        return True
       # only while lane change is off
-      if self.DH.lane_change_state == log.LateralPlan.LaneChangeState.off:
+      elif self.DH.lane_change_state == LaneChangeState.off:
         # laneline probability too low, we switch to laneless mode
-        if (self.LP.lll_prob + self.LP.rll_prob) / 2 < 0.3:
+        if (self.LP.lll_prob + self.LP.rll_prob) / 2 < 0.3 \
+          or ((longitudinal_plan.visionCurrentLatAcc > 1.0 or longitudinal_plan.visionMaxPredLatAcc > 1.4)
+           and self.vision_curve_laneless):
           self.dynamic_lane_profile_status_buffer = True
-        if (self.LP.lll_prob + self.LP.rll_prob) / 2 > 0.5:
+        if (self.LP.lll_prob + self.LP.rll_prob) / 2 > 0.5 \
+          and ((longitudinal_plan.visionCurrentLatAcc < 0.6 and longitudinal_plan.visionMaxPredLatAcc < 0.7)
+           or not self.vision_curve_laneless):
           self.dynamic_lane_profile_status_buffer = False
         if self.dynamic_lane_profile_status_buffer:  # in buffer mode, always laneless
           return True
