@@ -54,7 +54,7 @@ static void update_leads(UIState *s, const cereal::RadarState::Reader &radar_sta
   }
 }
 
-// z_off -> z_off_left, z_off_right 분리 + allow_invert 파라미터 추가
+// line_vertices_data* 버전 (lane lines, road edges, barriers 용)
 static void update_line_data(const UIState *s, const cereal::ModelDataV2::XYZTData::Reader &line,
                              float y_off, float z_off_left, float z_off_right, line_vertices_data *pvd, int max_idx, bool allow_invert=true) {
   const auto line_x = line.getX(), line_y = line.getY(), line_z = line.getZ();
@@ -69,6 +69,25 @@ static void update_line_data(const UIState *s, const cereal::ModelDataV2::XYZTDa
   }
   pvd->cnt = v - pvd->v;
   assert(pvd->cnt <= std::size(pvd->v));
+}
+
+// QPolygonF* 버전 (track_vertices, track_edge_vertices 용)
+static void update_line_data(const UIState *s, const cereal::ModelDataV2::XYZTData::Reader &line,
+                             float y_off, float z_off_left, float z_off_right, QPolygonF *pvd, int max_idx, bool allow_invert=true) {
+  const auto line_x = line.getX(), line_y = line.getY(), line_z = line.getZ();
+  pvd->clear();
+  for (int i = 0; i <= max_idx; i++) {
+    if (line_x[i] < 0) continue;
+    QPointF pt;
+    if (calib_frame_to_full_frame(s, line_x[i], line_y[i] - y_off, line_z[i] + z_off_left, &pt))
+      pvd->append(pt);
+  }
+  for (int i = max_idx; i >= 0; i--) {
+    if (line_x[i] < 0) continue;
+    QPointF pt;
+    if (calib_frame_to_full_frame(s, line_x[i], line_y[i] + y_off, line_z[i] + z_off_right, &pt))
+      pvd->append(pt);
+  }
 }
 
 static void update_model(UIState *s, const cereal::ModelDataV2::Reader &model) {
@@ -100,7 +119,7 @@ static void update_model(UIState *s, const cereal::ModelDataV2::Reader &model) {
     update_line_data(s, road_edges[i], 0.025, 0, 0, &scene.road_edge_vertices[i], max_idx);
   }
 
-  // update path
+  // update path (QPolygonF 오버로드 호출)
   auto lead_one = (*s->sm)["radarState"].getRadarState().getLeadOne();
   if (lead_one.getStatus()) {
     const float lead_d = lead_one.getDRel() * 2.;
