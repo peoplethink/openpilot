@@ -1036,6 +1036,16 @@ VIPPanel::VIPPanel(QWidget* parent) : QWidget(parent) {
 
   list->addItem(horizontal_line());
 
+  // ── Vision Curve Laneless (Auto 모드 전용) ───────────────────
+  list->addItem(new ParamControl("VisionCurveLaneless",
+                                  "Enable Vision Curve Laneless",
+                                  "Auto 모드에서 곡선 구간 진입 시 자동으로 Laneless(e2e) 모드로 전환합니다.\n"
+                                  "곡선이 끝나면 차선 인식률에 따라 다시 Lane 모드로 복귀합니다.",
+                                  "../assets/offroad/icon_road.png",
+                                  this));
+
+  list->addItem(horizontal_line());
+
   // ── AutoLaneChangeTimer ──────────────────────────────────────
   auto *lc_timer = new AutoLaneChangeTimerControl(
       "Auto Lane Change Timer",
