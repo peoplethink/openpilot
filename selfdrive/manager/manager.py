@@ -71,6 +71,7 @@ def manager_init() -> None:
     ("DynamicLaneProfile", "2"),
     ("DynamicLaneProfileToggle", "1"),
     ("VisionCurveLaneless", "1"),
+    ("TurnVisionControl", "1"),
 
     # Dynamic Experimental Control
     ("DynamicExperimentalControl", "0"),
