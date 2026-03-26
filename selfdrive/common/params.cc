@@ -212,6 +212,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"VisionCurveLaneless", PERSISTENT},
     {"DynamicExperimentalControl", PERSISTENT},
     {"DynamicExperimentalControlToggle", PERSISTENT},
+    {"TurnVisionControl", PERSISTENT},
 
     {"SoftRestartTriggered", CLEAR_ON_MANAGER_START},
 };
