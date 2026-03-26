@@ -968,6 +968,8 @@ struct LateralPlan @0xe1e9318e2ae8b51e {
   dynamicLaneProfileStatus @35 :Bool;
   laneChangePrev @36 :Bool;
   laneChangeEdgeBlock @37 :Bool;
+  dPathWLinesX @38 :List(Float32);
+  dPathWLinesY @39 :List(Float32);
 
   enum Desire {
     none @0;
