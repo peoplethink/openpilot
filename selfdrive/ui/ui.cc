@@ -271,7 +271,7 @@ UIState::UIState(QObject *parent) : QObject(parent) {
     "pandaStates", "carParams", "driverMonitoringState", "sensorEvents", "carState", "liveLocationKalman",
     "wideRoadCameraState",
     "gpsLocationExternal", "carControl", "liveParameters", "roadLimitSpeed", "lateralPlan",
-    "longitudinalPlan",  // [DEC] e2eBlended 읽기 위해 추가
+    "longitudinalPlan",
   });
 
   Params params;
