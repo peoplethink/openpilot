@@ -902,4 +902,30 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
       Priority.HIGH, VisualAlert.none, AudibleAlert.none, 2.),
   },
 
+  EventName.slowingDownSpeedSound: {
+    ET.PERMANENT: Alert("과속카메라 감지 : 감속중","", AlertStatus.normal, AlertSize.small,
+      Priority.HIGH, VisualAlert.none, AudibleAlert.none, 2.),
+  },
+
+  EventName.visionTurnControllerEntering: {
+    ET.PERMANENT: Alert(
+      "커브 감지: 감속 중", "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .1),
+  },
+
+  EventName.visionTurnControllerTurning: {
+    ET.PERMANENT: Alert(
+      "커브 주행 중", "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+  },
+
+  EventName.visionTurnControllerLeaving: {
+    ET.PERMANENT: Alert(
+      "커브 이탈: 가속 중", "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+  },
+
 }
