@@ -102,7 +102,7 @@ class LateralPlanner:
     if self.DH.desire == log.LateralPlan.Desire.laneChangeRight or self.DH.desire == log.LateralPlan.Desire.laneChangeLeft:
       self.LP.lll_prob *= self.DH.lane_change_ll_prob
       self.LP.rll_prob *= self.DH.lane_change_ll_prob
-    self.d_path_w_lines_xyz = self.LP.get_d_path(v_ego, self.t_idxs, self.path_xyz) 
+    self.d_path_w_lines_xyz = self.LP.get_d_path(self.v_ego, self.t_idxs, self.path_xyz) 
 
     # Calculate final driving path and set MPC costs
     if self.use_lanelines and not self.get_dynamic_lane_profile(sm['longitudinalPlan']):
