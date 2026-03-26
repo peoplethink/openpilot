@@ -749,6 +749,7 @@ struct ModelDataV2 {
   velocity @6 :XYZTData;
   orientationRate @7 :XYZTData;
   acceleration @19 :XYZTData;
+  temporalPose @21 :TemporalPoseData;
 
   # prediction lanelines and road edges
   laneLines @8 :List(XYZTData);
@@ -772,6 +773,13 @@ struct ModelDataV2 {
     xStd @4 :List(Float32);
     yStd @5 :List(Float32);
     zStd @6 :List(Float32);
+  }
+
+  struct TemporalPoseData {
+    trans @0 :List(Float32);
+    transStd @1 :List(Float32);
+    rot @2 :List(Float32);
+    rotStd @3 :List(Float32);
   }
 
   struct LeadDataV2 {
