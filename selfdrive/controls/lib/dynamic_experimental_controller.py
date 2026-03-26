@@ -35,7 +35,6 @@ class DynamicExperimentalController:
     self.dp_e2e_tf_count = 0
 
     self.dp_e2e_blinker_count = 0
-    pass
 
   def _set_dp_e2e_mode(self, mode, force=False):
     if force:
@@ -63,6 +62,7 @@ class DynamicExperimentalController:
       self.dp_e2e_blinker_count = 0
 
     if self.dp_e2e_blinker_count > _DP_E2E_BLINKER_COUNT:
+      self.dp_e2e_standstill_last = car_state.standstill  # [fix2]
       return self._set_dp_e2e_mode('blended', True)
 
     # make sure it see lead enough time
@@ -78,8 +78,10 @@ class DynamicExperimentalController:
     if car_state.standstill:
       self.dp_e2e_sng_count = 0
       self.dp_e2e_sng = False
+      self.dp_e2e_standstill_last = car_state.standstill  # [fix2]
       return self._set_dp_e2e_mode('blended')
 
+    # [fix2] 정지 → 출발 전환 감지 (standstill_last 갱신이 있어야 동작)
     if self.dp_e2e_standstill_last and not car_state.standstill:
       self.dp_e2e_sng = True
 
@@ -89,7 +91,9 @@ class DynamicExperimentalController:
       if self.dp_e2e_sng_count > _DP_E2E_SNG_COUNT:
         if self.dp_e2e_sng_count > _DP_E2E_SNG_ACC_COUNT:
           self.dp_e2e_sng = False
+        self.dp_e2e_standstill_last = car_state.standstill  # [fix2]
         return self._set_dp_e2e_mode('acc', True)
+      self.dp_e2e_standstill_last = car_state.standstill  # [fix2]
       return self._set_dp_e2e_mode('blended')
 
     # when we see a lead
@@ -100,6 +104,7 @@ class DynamicExperimentalController:
       else:
         self.dp_e2e_tf_count = 0
       if self.dp_e2e_tf_count > _DP_E2E_TF_COUNT:
+        self.dp_e2e_standstill_last = car_state.standstill  # [fix2]
         return self._set_dp_e2e_mode('blended', True)
 
     # slow down detection
@@ -109,15 +114,19 @@ class DynamicExperimentalController:
       self.dp_e2e_stop_count = 0
 
     if self.dp_e2e_stop_count >= _DP_E2E_STOP_COUNT:
+      self.dp_e2e_standstill_last = car_state.standstill  # [fix2]
       return self._set_dp_e2e_mode('blended', True)
 
+    # [fix2] 함수 말미 standstill_last 최종 갱신
+    self.dp_e2e_standstill_last = car_state.standstill
     return self._set_dp_e2e_mode('acc')
 
+  # [fix1] DEC 비활성 시에만 외부 mode를 따르도록 수정
   def get_mpc_mode(self, mode, radar_unavailable, car_state, lead_one, md):
-    self._mode = mode
-    if self._is_enabled:
+    if not self._is_enabled:
+      self._mode = mode
+    else:
       self._process_conditional_e2e(radar_unavailable, car_state, lead_one, md)
-
     return self._mode
 
   def set_enabled(self, enabled):
