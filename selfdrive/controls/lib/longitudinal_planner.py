@@ -194,7 +194,7 @@ class LongitudinalPlanner:
     longitudinalPlan.solverExecutionTime = self.mpc.solve_time
     longitudinalPlan.e2eBlended = self.mpc.mode
 
-    longitudinalPlan.visionCurrentLatAcc = float(self.vision_turn_controller.current_lat_acc)
-    longitudinalPlan.visionMaxPredLatAcc = float(self.vision_turn_controller.max_pred_lat_acc)
+    longitudinalPlan.visionCurrentLatAcc = 0.0
+    longitudinalPlan.visionMaxPredLatAcc = 0.0
 
     pm.send('longitudinalPlan', plan_send)
