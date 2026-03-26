@@ -31,6 +31,7 @@ from selfdrive.locationd.calibrationd import Calibration
 from selfdrive.hardware import HARDWARE, TICI, EON
 from selfdrive.manager.process_config import managed_processes
 from selfdrive.car.hyundai.scc_smoother import SccSmoother
+from selfdrive.controls.lib.vision_turn_controller import VisionTurnController
 from selfdrive.ntune import ntune_common_get, ntune_common_enabled, ntune_scc_get
 
 SOFT_DISABLE_TIME = 3  # seconds
@@ -150,6 +151,7 @@ class Controls:
     self.CS_prev = car.CarState.new_message()
     self.AM = AlertManager()
     self.events = Events()
+    self.vision_turn_controller = VisionTurnController(self.CP)
 
     self.LoC = LongControl(self.CP)
     self.VM = VehicleModel(self.CP)
@@ -460,6 +462,21 @@ class Controls:
     #if CS.brakePressed and v_future >= self.CP.vEgoStarting \
     #  and self.CP.openpilotLongitudinalControl and CS.vEgo < 0.3:
     #  self.events.add(EventName.noTarget)
+
+    # [추가] VisionTurnController 이벤트 업데이트
+    # enabled 상태이고 openpilot 롱컨을 사용할 때만 동작
+    if self.enabled and self.CP.openpilotLongitudinalControl:
+      self.vision_turn_controller.update(
+        self.enabled,
+        CS.vEgo,
+        CS.aEgo,
+        self.v_cruise_helper.v_cruise_kph * CV.KPH_TO_MS,
+        self.sm,
+        self.events,   # ← events 전달로 상태별 알림 자동 추가
+      )
+
+    # Only allow engagement with brake pressed when stopped behind another stopped car
+    speeds = self.sm['longitudinalPlan'].speeds
 
   def data_sample(self):
     """Receive data from sockets and update carState"""
