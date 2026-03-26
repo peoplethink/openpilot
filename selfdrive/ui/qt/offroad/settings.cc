@@ -242,6 +242,12 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       "Enable toggle to allow the model to determine when to use openpilot ACC or openpilot End to End Longitudinal.",
       "../assets/offroad/icon_speed_limit.png",
     },
+    {
+      "TurnVisionControl",
+      "Enable vision based turn control",
+      "Use vision path predictions to estimate the appropiate speed to drive through turns ahead.",
+      "../assets/offroad/icon_road.png",
+    },
 #ifdef ENABLE_MAPS
     {
       "NavSettingTime24h",
