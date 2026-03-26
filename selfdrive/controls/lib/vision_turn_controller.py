@@ -279,7 +279,36 @@ class VisionTurnController():
     # update solution values.
     self._a_target = a_target
 
-  def update(self, enabled, v_ego, a_ego, v_cruise_setpoint, sm):
+  # =====================================================================
+  # [추가] 이벤트 발생 메서드
+  # events 객체(Events 클래스 인스턴스)를 받아 현재 상태에 맞는 이벤트를 추가합니다.
+  # =====================================================================
+  def _update_events(self, events):
+    """
+    VisionTurnController의 현재 상태에 따라 적절한 이벤트를 events에 추가합니다.
+
+    - ENTERING : 커브 진입 감속 중 알림 (visionTurnControllerEntering)
+    - TURNING  : 커브 주행 중 알림 (visionTurnControllerTurning)
+    - LEAVING  : 커브 이탈 후 재가속 알림 (visionTurnControllerLeaving)
+    - DISABLED : 이벤트 없음
+    """
+    from cereal import car
+    EventName = car.CarEvent.EventName
+
+    if self.state == VisionTurnControllerState.entering:
+      events.add(EventName.visionTurnControllerEntering)
+
+    elif self.state == VisionTurnControllerState.turning:
+      events.add(EventName.visionTurnControllerTurning)
+
+    elif self.state == VisionTurnControllerState.leaving:
+      events.add(EventName.visionTurnControllerLeaving)
+
+  # =====================================================================
+  # [수정] update() 메서드 — events 파라미터 추가
+  # 기존 호출부에서 events=None 으로 호환 가능하도록 기본값 None 설정
+  # =====================================================================
+  def update(self, enabled, v_ego, a_ego, v_cruise_setpoint, sm, events=None):
     self._op_enabled = enabled
     self._gas_pressed = sm['carState'].gasPressed
     self._v_ego = v_ego
@@ -290,3 +319,7 @@ class VisionTurnController():
     self._update_calculations(sm)
     self._state_transition()
     self._update_solution()
+
+    # [추가] events 객체가 전달된 경우에만 이벤트 업데이트 수행
+    if events is not None:
+      self._update_events(events)
