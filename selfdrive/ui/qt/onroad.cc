@@ -718,7 +718,7 @@ void NvgWindow::drawDecStatus(QPainter &p) {
   } else if (!exp_mode) {
     dec_text = "DEC: Inactive";
   } else {
-    dec_text = "DEC: " + mpcMode;
+    dec_text = "DEC: " + mpcSource;
   }
 
   configFont(p, "Open Sans", 36, "Bold");
@@ -1452,7 +1452,7 @@ void NvgWindow::drawDebugText(QPainter &p) {
 
   // [DEC] DEC mpcMode 디버그 표시
   y += height;
-  str.sprintf("DEC mode: %s\n", mpcMode.toStdString().c_str());
+  str.sprintf("DEC mode: %s\n", mpcSource.toStdString().c_str());
   p.drawText(text_x, y, str);
 
   p.restore();
