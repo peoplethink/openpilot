@@ -290,8 +290,12 @@ void NvgWindow::initializeGL() {
 void NvgWindow::updateState(const UIState &s) {	
   const SubMaster &sm = *(s.sm);
   const auto cs = sm["controlsState"].getControlsState();
+  const auto car_state = sm["carState"].getCarState();
+  const auto car_control = sm["carControl"].getCarControl();
 
   setProperty("status", s.status);
+  setProperty("left_blindspot", cs_alive && sm["carState"].getCarState().getLeftBlindspot());
+  setProperty("right_blindspot", cs_alive && sm["carState"].getCarState().getRightBlindspot());
 
   // update engageability and DM icons at 2Hz
   if (sm.frame % (UI_FREQ / 2) == 0) {
@@ -307,11 +311,6 @@ void NvgWindow::updateState(const UIState &s) {
         ? QString(tr("Blended"))
         : QString(tr("ACC"));     
   }
-
-  // blind spot state sync
-  auto car_state = sm["carState"].getCarState();
-  setProperty("left_blindspot",  car_state.getLeftBlindspot());
-  setProperty("right_blindspot", car_state.getRightBlindspot());
 }
 
 void NvgWindow::updateFrameMat(int w, int h) {
@@ -347,26 +346,16 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
     painter.drawPolygon(scene.lane_line_vertices[i].v, scene.lane_line_vertices[i].cnt);
   }
 
+  // TODO: Fix empty spaces when curiving back on itself
+  painter.setBrush(QColor::fromRgbF(1.0, 0.0, 0.0, 0.2));
+  if (left_blindspot) painter.drawPolygon(scene.lane_barrier_vertices[0]);
+  if (right_blindspot) painter.drawPolygon(scene.lane_barrier_vertices[1]);
+	
   // road edges
   for (int i = 0; i < std::size(scene.road_edge_vertices); ++i) {
     painter.setBrush(QColor::fromRgbF(1.0, 0, 0, std::clamp<float>(1.0 - scene.road_edge_stds[i], 0.0, 1.0)));
     painter.drawPolygon(scene.road_edge_vertices[i].v, scene.road_edge_vertices[i].cnt);
   }
-
-  //Blind Spot Warnings
-  painter.setPen(Qt::NoPen);
-
-  // 왼쪽 barrier: 감지=빨강(alpha 0.45), 평상시=흰색(alpha 0.10)
-  painter.setBrush(left_blindspot
-      ? QColor::fromRgbF(1.0, 0.0, 0.0, 0.45)
-      : QColor::fromRgbF(1.0, 1.0, 1.0, 0.10));
-  painter.drawPolygon(scene.lane_barrier_vertices[0].v, scene.lane_barrier_vertices[0].cnt);
-
-  // 오른쪽 barrier: 감지=빨강(alpha 0.45), 평상시=흰색(alpha 0.10)
-  painter.setBrush(right_blindspot
-      ? QColor::fromRgbF(1.0, 0.0, 0.0, 0.45)
-      : QColor::fromRgbF(1.0, 1.0, 1.0, 0.10));
-  painter.drawPolygon(scene.lane_barrier_vertices[1].v, scene.lane_barrier_vertices[1].cnt);
 	
   // paint path
   QLinearGradient bg(0, height(), 0, height() / 4);
