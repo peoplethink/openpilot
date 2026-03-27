@@ -302,11 +302,10 @@ void NvgWindow::updateState(const UIState &s) {
   // [DEC] mpcMode 읽기: longitudinalPlan의 e2eBlended 필드
   if (sm.updated("longitudinalPlan")) {
     const auto lp = sm["longitudinalPlan"].getLongitudinalPlan();
-    QString mode = QString::fromStdString(lp.getE2eBlended());
-    // "blended" → "Blended", 그 외 → 대문자 (e.g. "ACC")
-    mpcMode = (mode == "blended")
-        ? mode.replace(0, 1, mode[0].toUpper())
-        : mode.toUpper();
+    const auto mpc_source = lp.getMpcSource();  // 변경: getE2eBlended() → getMpcSource()
+    mpcMode = (mpc_source == cereal::MpcSource::BLENDED)
+        ? QString(tr("Blended"))
+        : QString(tr("ACC"));     
   }
 
   // blind spot state sync
@@ -371,8 +370,16 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
 	
   // paint path
   QLinearGradient bg(0, height(), 0, height() / 4);
+
+  // 추가: DEC 상태를 고려한 experimental mode path 판정
+  const auto long_plan = sm["longitudinalPlan"].getLongitudinalPlan();
+  bool exp_mode_path = (long_plan.getDynamicExperimentalControl() &&
+                        long_plan.getMpcSource() == cereal::MpcSource::BLENDED) ||
+                       (!long_plan.getDynamicExperimentalControl() &&
+                        sm["controlsState"].getControlsState().getExperimentalMode());
+
   float start_hue, end_hue;
-  if (sm["controlsState"].getControlsState().getExperimentalMode()) {
+  if (exp_mode_path) {  // 변경: getExperimentalMode() → exp_mode_path
     const auto &acceleration = sm["modelV2"].getModelV2().getAcceleration();
     float acceleration_future = 0;
     if (acceleration.getZ().size() > 16) {
@@ -380,14 +387,11 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
     }
     if (scene.dynamic_lane_profile_status) {
       start_hue = 60;
-      // speed up: 120, slow down: 0
       end_hue = fmax(fmin(start_hue + acceleration_future * 45, 148), 0);
     } else {
       start_hue = 240;
-      // speed up: 300, slow down: 180
       end_hue = fmin(fmax(start_hue + acceleration_future * 45, 180), 328);
     }
-    // FIXME: painter.drawPolygon can be slow if hue is not rounded
     end_hue = int(end_hue * 100 + 0.5) / 100;
 
     bg.setColorAt(0.0, QColor::fromHslF(start_hue / 360., 0.97, 0.56, 0.7));
@@ -404,7 +408,6 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
   }
 
   if (!scene.dynamic_lane_profile_status) {
-    // paint path edges
     QLinearGradient pe(0, height(), 0, height() / 4);
     pe.setColorAt(0.0, whiteColor(102));
     pe.setColorAt(0.5, whiteColor(89));
