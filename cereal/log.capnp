@@ -8,6 +8,11 @@ using Legacy = import "legacy.capnp";
 
 const logVersion :Int32 = 1;
 
+enum MpcSource {
+  acc @0;
+  blended @1;
+}
+
 struct Map(Key, Value) {
   entries @0 :List(Entry);
   struct Entry {
@@ -884,11 +889,14 @@ struct LongitudinalPlan @0xe00b5b3eba12876c {
   jerks @34 :List(Float32);
 
   solverExecutionTime @35 :Float32;
-  e2eBlended @36 :Text;
+  e2eBlendedDEPRECATED @36 :Text;
   visionTurnControllerState @37 :VisionTurnControllerState;
   visionTurnSpeed @38 :Float32;
   visionCurrentLatAcc @39 :Float32;
   visionMaxPredLatAcc @40 :Float32;
+  e2eStatus @41 :Bool;                 # 신규 추가
+  mpcSource @42 :MpcSource;            # 신규 추가
+  dynamicExperimentalControl @43 :Bool; # 신규 추가
 
   enum VisionTurnControllerState {
     disabled @0;
