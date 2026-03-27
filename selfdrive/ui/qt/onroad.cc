@@ -291,8 +291,6 @@ void NvgWindow::updateState(const UIState &s) {
   const SubMaster &sm = *(s.sm);
   const auto cs = sm["controlsState"].getControlsState();
   bool cs_alive = sm.alive("controlsState");
-  const auto car_state = sm["carState"].getCarState();
-  const auto car_control = sm["carControl"].getCarControl();
 
   setProperty("status", s.status);
   setProperty("left_blindspot", cs_alive && sm["carState"].getCarState().getLeftBlindspot());
