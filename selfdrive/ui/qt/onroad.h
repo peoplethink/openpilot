@@ -71,7 +71,7 @@ protected:
   float lead_status_alpha = 0.0f;
 
   // [DEC] Dynamic Experimental Control mpc mode string
-  QString mpcMode;
+  QString mpcSource;
 
   FirstOrderFilter fps_filter;
   FirstOrderFilter accel_filter;
