@@ -29,7 +29,7 @@ _A_TOTAL_MAX_V = [1.7, 3.2]
 _A_TOTAL_MAX_BP = [20., 40.]
 
 # MpcSource enum 참조
-MpcSource = custom.MpcSource  # 추가
+MpcSource = log.MpcSource  # 추가
 
 
 def get_max_accel(v_ego):
