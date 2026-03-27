@@ -22,6 +22,8 @@ class DynamicExperimentalController:
     self._params = Params()
     self._is_enabled = False
     self._mode = 'acc'
+    self._mode_prev = 'acc'      # 추가: mode 변경 감지용
+    self._mode_changed = False   # 추가: mode 변경 여부
 
     # conditional e2e
     self.dp_e2e_has_lead = False
@@ -35,6 +37,12 @@ class DynamicExperimentalController:
     self.dp_e2e_tf_count = 0
 
     self.dp_e2e_blinker_count = 0
+
+    # 추가: radar_unavailable, car_state 등 update()에서 저장
+    self._radar_unavailable = False
+    self._car_state = None
+    self._lead_one = None
+    self._md = None
 
   def _set_dp_e2e_mode(self, mode, force=False):
     if force:
@@ -52,7 +60,13 @@ class DynamicExperimentalController:
       if self.dp_e2e_swap_count >= _DP_E2E_SWAP_COUNT:
         self._mode = mode
 
-  def _process_conditional_e2e(self, radar_unavailable, car_state, lead_one, md):
+  def _process_conditional_e2e(self):
+    # update()에서 저장한 값 사용
+    radar_unavailable = self._radar_unavailable
+    car_state = self._car_state
+    lead_one = self._lead_one
+    md = self._md
+
     v_ego_kph = car_state.vEgo * 3.6
 
     # when blinker is on, use blended
@@ -121,13 +135,26 @@ class DynamicExperimentalController:
     self.dp_e2e_standstill_last = car_state.standstill
     return self._set_dp_e2e_mode('acc')
 
-  # [fix1] DEC 비활성 시에만 외부 mode를 따르도록 수정
-  def get_mpc_mode(self, mode, radar_unavailable, car_state, lead_one, md):
-    if not self._is_enabled:
-      self._mode = mode
-    else:
-      self._process_conditional_e2e(radar_unavailable, car_state, lead_one, md)
+  def update(self, radar_unavailable, car_state, lead_one, md, controls_state, maneuver_distance):
+    """커밋에서 get_mpc_mode()에서 분리된 update() 메서드"""
+    if self._is_enabled:
+      # 인자 저장
+      self._radar_unavailable = radar_unavailable
+      self._car_state = car_state
+      self._lead_one = lead_one
+      self._md = md
+      # 기존 _process_conditional_e2e 호출
+      self._process_conditional_e2e()
+
+    self._mode_changed = self._mode != self._mode_prev
+    self._mode_prev = self._mode
+
+  def get_mpc_mode(self):
+    """커밋에서 인자 없는 단순 getter로 변경"""
     return self._mode
+
+  def has_changed(self):
+    return self._mode_changed
 
   def set_enabled(self, enabled):
     self._is_enabled = enabled
