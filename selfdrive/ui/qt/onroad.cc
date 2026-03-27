@@ -290,6 +290,7 @@ void NvgWindow::initializeGL() {
 void NvgWindow::updateState(const UIState &s) {	
   const SubMaster &sm = *(s.sm);
   const auto cs = sm["controlsState"].getControlsState();
+  bool cs_alive = sm.alive("controlsState");
   const auto car_state = sm["carState"].getCarState();
   const auto car_control = sm["carControl"].getCarControl();
 
@@ -348,8 +349,10 @@ void NvgWindow::drawLaneLines(QPainter &painter, const UIState *s) {
 
   // TODO: Fix empty spaces when curiving back on itself
   painter.setBrush(QColor::fromRgbF(1.0, 0.0, 0.0, 0.2));
-  if (left_blindspot) painter.drawPolygon(scene.lane_barrier_vertices[0]);
-  if (right_blindspot) painter.drawPolygon(scene.lane_barrier_vertices[1]);
+  if (left_blindspot) painter.drawPolygon(scene.lane_barrier_vertices[0].v,   // .v, .cnt 추가
+                                          scene.lane_barrier_vertices[0].cnt);
+  if (right_blindspot) painter.drawPolygon(scene.lane_barrier_vertices[1].v,  // .v, .cnt 추가
+                                           scene.lane_barrier_vertices[1].cnt);
 	
   // road edges
   for (int i = 0; i < std::size(scene.road_edge_vertices); ++i) {
