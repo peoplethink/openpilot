@@ -38,6 +38,11 @@ ButtonPrev = ButtonType.unknown
 ButtonCnt = 0
 LongPressed = False
 
+# [FIX] 끼어들기 급브레이크 방지: 프레임당 최대 target_speed 감소폭 (clu 단위)
+# 값이 클수록 빠르게 반응, 작을수록 부드럽게 반응. 고속/저속 공통 적용.
+MAX_TARGET_SPEED_DECREASE_PER_FRAME = 3.0
+
+
 class SccSmoother:
 
   @staticmethod
@@ -190,7 +195,10 @@ class SccSmoother:
         max_speed_clu = min(max_speed_clu, lead_speed)
 
         if not self.limited_lead:
-          self.max_speed_clu = clu11_speed + 3.
+          # [FIX] 끼어들기 첫 감지 시 max_speed를 현재속도+3으로 즉시 고정하던 로직 완화
+          # 기존: self.max_speed_clu = clu11_speed + 3.  → 급격한 속도 목표 하락
+          # 수정: 현재속도+10으로 여유 확보, 이후 update_max_speed의 kp로 부드럽게 수렴
+          self.max_speed_clu = clu11_speed + 10.
           self.limited_lead = True
     else:
       self.limited_lead = False
@@ -300,6 +308,14 @@ class SccSmoother:
     return None
 
   def get_long_lead_speed(self, CS, clu11_speed, sm):
+    # [FIX] 끼어들기 급브레이크 방지
+    # 기존 문제:
+    #   1. accel *= 1.2 로 감속값 20% 추가 증폭
+    #   2. target_speed를 한 프레임에 즉시 점프시켜 급브레이크 유발
+    # 수정:
+    #   1. accel 증폭 계수 1.2 → 1.0 제거
+    #   2. 이전 target_speed 대비 프레임당 최대 감소폭(MAX_TARGET_SPEED_DECREASE_PER_FRAME) 제한
+    #      → 끼어들기 감지 후 목표 속도가 부드럽게 낮아짐 (고속/저속 동일 적용)
 
     if self.longcontrol:
       lead = self.get_lead(sm)
@@ -308,11 +324,18 @@ class SccSmoother:
         if 0. < d < -lead.vRel * (9. + 3.) * 2. and lead.vRel < -1.:
           t = d / lead.vRel
           accel = -(lead.vRel / t) * self.speed_conv_to_clu
-          accel *= 1.2
+          # [FIX] 증폭 계수 제거 (1.2 → 1.0)
+          # accel *= 1.2
 
           if accel < 0.:
             target_speed = clu11_speed + accel
             target_speed = max(target_speed, self.min_set_speed_clu)
+
+            # [FIX] ramp: 이전 target_speed 대비 프레임당 최대 감소폭 제한
+            if self.target_speed > 0:
+              target_speed = max(target_speed,
+                                 self.target_speed - MAX_TARGET_SPEED_DECREASE_PER_FRAME)
+
             return target_speed
 
     return 0
