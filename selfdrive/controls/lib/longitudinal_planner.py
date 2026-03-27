@@ -4,6 +4,7 @@ import numpy as np
 from common.numpy_fast import clip, interp
 
 import cereal.messaging as messaging
+from cereal import log
 from common.conversions import Conversions as CV
 from common.filter_simple import FirstOrderFilter
 from common.params import Params
@@ -26,6 +27,9 @@ A_CRUISE_MAX_BP = [0., 10., 25., 40.]
 # Lookup table for turns
 _A_TOTAL_MAX_V = [1.7, 3.2]
 _A_TOTAL_MAX_BP = [20., 40.]
+
+# MpcSource enum 참조
+MpcSource = custom.MpcSource  # 추가
 
 
 def get_max_accel(v_ego):
@@ -101,14 +105,18 @@ class LongitudinalPlanner:
       self.read_param()
     self.param_read_counter += 1
 
-    # [DEC] DEC가 활성화된 경우 DEC가 mpc.mode 결정, 아니면 기존 방식 유지
-    if self.dynamic_experimental_controller.is_enabled():
-      self.mpc.mode = self.dynamic_experimental_controller.get_mpc_mode(
-        'blended' if sm['controlsState'].experimentalMode else 'acc',
-        self.CP.radarUnavailable, sm['carState'], sm['radarState'].leadOne, sm['modelV2'])
+    # [DEC] DEC가 활성화된 경우 update() 호출 후 get_mpc_mode()로 mode 결정
+    if self.dynamic_experimental_controller.is_enabled() and sm['controlsState'].experimentalMode:
+      self.dynamic_experimental_controller.update(  # update()와 get_mpc_mode() 분리
+        self.CP.radarUnavailable,
+        sm['carState'],
+        sm['radarState'].leadOne,
+        sm['modelV2'],
+        sm['controlsState'],
+        sm['navInstruction'].maneuverDistance)
+      self.mpc.mode = self.dynamic_experimental_controller.get_mpc_mode()
     else:
-      e2e = self.params.get_bool('ExperimentalMode') and self.CP.openpilotLongitudinalControl
-      self.mpc.mode = 'blended' if e2e else 'acc'
+      self.mpc.mode = 'blended' if sm['controlsState'].experimentalMode else 'acc'
 
     v_ego = sm['carState'].vEgo
 
@@ -204,7 +212,10 @@ class LongitudinalPlanner:
 
     longitudinalPlan.visionTurnControllerState = self.vision_turn_controller.state
     longitudinalPlan.visionTurnSpeed = float(self.vision_turn_controller.v_turn)
-    longitudinalPlan.e2eBlended = self.mpc.mode
+
+    # e2eBlended → mpcSource (MpcSource enum) 으로 변경
+    longitudinalPlan.mpcSource = MpcSource.blended if self.mpc.mode == 'blended' else MpcSource.acc
+    longitudinalPlan.dynamicExperimentalControl = self.dynamic_experimental_controller.is_enabled()  # 추가
 
     longitudinalPlan.visionCurrentLatAcc = 0.0
     longitudinalPlan.visionMaxPredLatAcc = 0.0
