@@ -303,7 +303,7 @@ void NvgWindow::updateState(const UIState &s) {
   if (sm.updated("longitudinalPlan")) {
     const auto lp = sm["longitudinalPlan"].getLongitudinalPlan();
     const auto mpc_source = lp.getMpcSource();  // 변경: getE2eBlended() → getMpcSource()
-    mpcMode = (mpc_source == cereal::MpcSource::BLENDED)
+    mpcSource = (mpc_source == cereal::MpcSource::BLENDED)
         ? QString(tr("Blended"))
         : QString(tr("ACC"));     
   }
