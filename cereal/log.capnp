@@ -899,11 +899,10 @@ struct LongitudinalPlan @0xe00b5b3eba12876c {
   dynamicExperimentalControl @43 :Bool; # 신규 추가
 
   enum VisionTurnControllerState {
-    disabled @0;
-    standstill @1;
-    waiting @2;
-    adapting @3;
-    active @4;
+    disabled  @0;
+    entering  @1;
+    turning   @2;
+    leaving   @3;
   }
 
   enum LongitudinalPlanSource {
