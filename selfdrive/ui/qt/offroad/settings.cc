@@ -1150,15 +1150,15 @@ VIPPanel::VIPPanel(QWidget* parent) : QWidget(parent) {
   ListWidget* list = new ListWidget(this);
   list->setSpacing(0);
 
-    // ── Camera Offset ────────────────────────────────────────────
+  // ── Camera Offset ────────────────────────────────────────────
   // 레인모드에서 차선 인식 좌표 보정. 0.01m 단위, -0.20 ~ +0.20m
   auto *cam_offset = new CameraOffsetControl(
-      "Camera Offset",
-      "카메라 위치 보정값입니다. 레인모드에서 차선 인식 좌표에 적용됩니다.\n"
-      "왼쪽으로 이동: 음수(−) / 오른쪽으로 이동: 양수(+)\n"
-      "범위: −0.20 ~ +0.20m  /  기본값: −0.06m",
-      "../assets/offroad/icon_road.png",
-      this);
+    "Camera Offset",
+    "카메라 위치 보정값입니다. 레인모드에서 차선 인식 좌표에 적용됩니다.\n"
+    "왼쪽으로 이동: 양수(+) / 오른쪽으로 이동: 음수(−)\n"    // ← 수정
+    "범위: −0.20 ~ +0.20m  /  기본값: −0.06m",
+    "../assets/offroad/icon_road.png",
+    this);
   cam_offset->showDescription();
   list->addItem(cam_offset);
 
@@ -1167,12 +1167,12 @@ VIPPanel::VIPPanel(QWidget* parent) : QWidget(parent) {
   // ── Path Offset ──────────────────────────────────────────────
   // 레인모드 + 레인리스 모드 모두 적용. 0.01m 단위, -1.00 ~ +1.00m
   auto *path_offset = new PathOffsetControl(
-      "Path Offset",
-      "주행 경로 좌우 보정값입니다. 레인모드·레인리스 모드 모두 적용됩니다.\n"
-      "왼쪽으로 이동: 음수(−) / 오른쪽으로 이동: 양수(+)\n"
-      "범위: −1.00 ~ +1.00m  /  기본값: 0.00m",
-      "../assets/offroad/icon_road.png",
-      this);
+    "Path Offset",
+    "주행 경로 좌우 보정값입니다. 레인모드·레인리스 모드 모두 적용됩니다.\n"
+    "왼쪽으로 이동: 양수(+) / 오른쪽으로 이동: 음수(−)\n"    // ← 수정
+    "범위: −1.00 ~ +1.00m  /  기본값: 0.00m",
+    "../assets/offroad/icon_road.png",
+    this);
   path_offset->showDescription();
   list->addItem(path_offset);
 
