@@ -38,9 +38,15 @@ ButtonPrev = ButtonType.unknown
 ButtonCnt = 0
 LongPressed = False
 
-# [FIX] 끼어들기 급브레이크 방지: 프레임당 최대 target_speed 감소폭 (clu 단위)
-# 값이 클수록 빠르게 반응, 작을수록 부드럽게 반응. 고속/저속 공통 적용.
-MAX_TARGET_SPEED_DECREASE_PER_FRAME = 1.0
+# [FIX] 끼어들기 급브레이크 방지: 속도별 target_speed 프레임당 최대 감소폭 (clu/frame, 20Hz 기준)
+# 기존: 고정값 1.0 → 고속에서 초당 20 kph 감소로 반응이 너무 느림
+# 수정: long_mpc x_obstacle ramp와 동일하게 속도 비례 적용
+#   0  kph → 1.0 clu/frame
+#   30 kph → 1.5 clu/frame
+#   80 kph → 2.5 clu/frame
+#  120 kph → 3.5 clu/frame
+TARGET_SPEED_RAMP_BP_KPH = [0., 30., 80., 120.]
+TARGET_SPEED_RAMP_MAX_V  = [1.0, 1.5, 2.5, 3.5]
 
 
 class SccSmoother:
@@ -312,10 +318,11 @@ class SccSmoother:
     # 기존 문제:
     #   1. accel *= 1.2 로 감속값 20% 추가 증폭
     #   2. target_speed를 한 프레임에 즉시 점프시켜 급브레이크 유발
+    #   3. ramp 감소폭이 속도 무관 고정값 → 고속에서 반응 너무 느림
     # 수정:
-    #   1. accel 증폭 계수 1.2 → 1.0 제거
-    #   2. 이전 target_speed 대비 프레임당 최대 감소폭(MAX_TARGET_SPEED_DECREASE_PER_FRAME) 제한
-    #      → 끼어들기 감지 후 목표 속도가 부드럽게 낮아짐 (고속/저속 동일 적용)
+    #   1. accel 증폭 계수 1.2 제거
+    #   2. 이전 target_speed 대비 프레임당 최대 감소폭을 속도에 비례해 제한
+    #      → long_mpc x_obstacle ramp와 동일한 방식으로 맞춤
 
     if self.longcontrol:
       lead = self.get_lead(sm)
@@ -331,10 +338,12 @@ class SccSmoother:
             target_speed = clu11_speed + accel
             target_speed = max(target_speed, self.min_set_speed_clu)
 
-            # [FIX] ramp: 이전 target_speed 대비 프레임당 최대 감소폭 제한
+            # [FIX] 속도 비례 ramp: 고속일수록 더 빠르게 수렴 허용
             if self.target_speed > 0:
+              clu11_kph = clu11_speed / self.speed_conv_to_clu * CV.MS_TO_KPH
+              ramp_max = interp(clu11_kph, TARGET_SPEED_RAMP_BP_KPH, TARGET_SPEED_RAMP_MAX_V)
               target_speed = max(target_speed,
-                                 self.target_speed - MAX_TARGET_SPEED_DECREASE_PER_FRAME)
+                                 self.target_speed - ramp_max)
 
             return target_speed
 
