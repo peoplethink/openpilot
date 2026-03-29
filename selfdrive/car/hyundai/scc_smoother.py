@@ -40,7 +40,7 @@ LongPressed = False
 
 # [FIX] 끼어들기 급브레이크 방지: 프레임당 최대 target_speed 감소폭 (clu 단위)
 # 값이 클수록 빠르게 반응, 작을수록 부드럽게 반응. 고속/저속 공통 적용.
-MAX_TARGET_SPEED_DECREASE_PER_FRAME = 2.0
+MAX_TARGET_SPEED_DECREASE_PER_FRAME = 1.0
 
 
 class SccSmoother:
