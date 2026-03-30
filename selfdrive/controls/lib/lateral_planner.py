@@ -128,53 +128,34 @@ class LateralPlanner:
     lane_change_prob = self.LP.l_lane_change_prob + self.LP.r_lane_change_prob
     self.DH.update(sm['carState'], sm['carControl'].latActive, lane_change_prob)
 
-    # ✅ 커브 감지: 곡률 절댓값으로 커브 여부 판단
-    abs_curvature = abs(measured_curvature)
-    in_curve = abs_curvature > 0.01  # 약 100m 이하 반경부터 커브로 인식
-
-    d_path_xyz = self.path_xyz.copy()
-
+    d_path_xyz = self.path_xyz
     if self.DH.desire == log.LateralPlan.Desire.laneChangeRight or self.DH.desire == log.LateralPlan.Desire.laneChangeLeft:
       self.LP.lll_prob *= self.DH.lane_change_ll_prob
       self.LP.rll_prob *= self.DH.lane_change_ll_prob
 
     if self.use_lanelines and not self.get_dynamic_lane_profile():
-      # ✅ 커브 구간에서 내측 차선 확률 과다 반응 억제 → 인코스 방지
-      if in_curve:
-        curve_factor = interp(abs_curvature, [0.01, 0.03], [1.0, 0.6])
-        self.LP.lll_prob *= curve_factor
-        self.LP.rll_prob *= curve_factor
-
       d_path_xyz = self.LP.get_d_path(self.v_ego, self.t_idxs, self.path_xyz)
       self.dynamic_lane_profile_status = False
-
-      # ✅ 커브 시 lateral_motion_cost 증가 → 급격한 경로 변화 억제
-      if in_curve:
-        lateral_motion_cost = interp(abs_curvature, [0.01, 0.03],
-                                     [LATERAL_MOTION_COST, LATERAL_MOTION_COST * 2.0])
-      else:
-        lateral_motion_cost = LATERAL_MOTION_COST
-
-      self.lat_mpc.set_weights(PATH_COST, lateral_motion_cost,
-                               LATERAL_ACCEL_COST, LATERAL_JERK_COST,
-                               STEERING_RATE_COST)
+      self.lat_mpc.set_weights(PATH_COST, LATERAL_MOTION_COST,
+                             LATERAL_ACCEL_COST, LATERAL_JERK_COST,
+                             STEERING_RATE_COST)
 
     else:
-      d_path_xyz = self.path_xyz.copy()
+      d_path_xyz = self.path_xyz
       self.dynamic_lane_profile_status = True
-
       lateral_motion_cost = interp(self.v_ego, [5.0, 10.0],
-                                   [LATERAL_MOTION_COST * 1.5, LATERAL_MOTION_COST])
-
-      # ✅ 중복 set_weights 제거 - if/else 각 블록에서만 한 번씩 호출
+                                 [LATERAL_MOTION_COST * 1.5, LATERAL_MOTION_COST])
       self.lat_mpc.set_weights(PATH_COST, lateral_motion_cost,
                                LATERAL_ACCEL_COST, LATERAL_JERK_COST,
                                STEERING_RATE_COST)
 
-    # path_offset 적용 (ntune 제거 → Params 기반 self.path_offset 사용)
+
+    # ntune pathOffset 제거 → Params 기반 self.path_offset 사용
     d_path_xyz[:, 1] += self.path_offset
 
-    # ❌ 기존 중복 set_weights 호출 제거됨
+    self.lat_mpc.set_weights(PATH_COST, LATERAL_MOTION_COST,
+                             LATERAL_ACCEL_COST, LATERAL_JERK_COST,
+                             STEERING_RATE_COST)
 
     y_pts = np.interp(self.v_ego * self.t_idxs[:LAT_MPC_N + 1],
                       np.linalg.norm(d_path_xyz, axis=1),
@@ -182,13 +163,13 @@ class LateralPlanner:
     heading_pts = np.interp(self.v_ego * self.t_idxs[:LAT_MPC_N + 1],
                             np.linalg.norm(self.path_xyz, axis=1),
                             self.plan_yaw)
-    yaw_rate_pts = self.plan_yaw_rate[:LAT_MPC_N + 1]
+    yaw_rate_pts = self.plan_yaw_rate[:LAT_MPC_N+1]
     self.y_pts = y_pts
 
     assert len(y_pts) == LAT_MPC_N + 1
     assert len(heading_pts) == LAT_MPC_N + 1
     assert len(yaw_rate_pts) == LAT_MPC_N + 1
-    lateral_factor = np.clip(self.factor1 - (self.factor2 * self.v_plan ** 2), 0.0, np.inf)
+    lateral_factor = np.clip(self.factor1 - (self.factor2 * self.v_plan**2), 0.0, np.inf)
     p = np.column_stack([self.v_plan, lateral_factor])
     self.lat_mpc.run(self.x0,
                      p,
@@ -238,8 +219,8 @@ class LateralPlanner:
     lateralPlan.laneWidth = float(self.LP.lane_width)
     lateralPlan.dPathPoints = self.y_pts.tolist()
     lateralPlan.psis = self.lat_mpc.x_sol[0:CONTROL_N, 2].tolist()
-    lateralPlan.curvatures = (self.lat_mpc.x_sol[0:CONTROL_N, 3] / self.v_ego).tolist()
-    lateralPlan.curvatureRates = [float(x / self.v_ego) for x in self.lat_mpc.u_sol[0:CONTROL_N - 1]] + [0.0]
+    lateralPlan.curvatures = (self.lat_mpc.x_sol[0:CONTROL_N, 3]/self.v_ego).tolist()
+    lateralPlan.curvatureRates = [float(x/self.v_ego) for x in self.lat_mpc.u_sol[0:CONTROL_N - 1]] + [0.0]
 
     lateralPlan.lProb = float(self.LP.lll_prob)
     lateralPlan.rProb = float(self.LP.rll_prob)
