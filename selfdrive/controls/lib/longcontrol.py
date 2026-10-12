@@ -11,9 +11,22 @@ ButtonType = car.CarState.ButtonEvent.Type
 
 # 정차 래치. 완전히 선 뒤에는 플래너가 한 프레임 튀어도 stopping 을 유지한다.
 STANDSTILL_LATCH_SPEED = 0.05
-# 출발은 플래너가 이만큼 "연속으로" 요구해야 인정한다(0.15 s). 레이더·모델
-# 노이즈 한두 프레임은 걸러지고, 진짜 출발은 거의 지연 없이 통과한다.
-STANDSTILL_RELEASE_FRAMES = 10
+# 출발은 플래너가 이만큼 "연속으로" 요구해야 인정한다(DT_CTRL 0.01 s 기준 0.5 s).
+# 이전 값 10 프레임(0.1 s)은 리드가 잠깐 끊기거나 정지거리 오차를 메우려는
+# 플래너 요구만으로도 래치가 풀려, 앞차가 서 있는데 전진하는 원인이 되었다.
+STANDSTILL_RELEASE_FRAMES = 50
+
+# 정차 중 앞차 출발 판정.
+# 앞차가 보이는 동안에는 플래너 요구만으로 출발하지 않고, 앞차가 실제로
+# 멀어지고 있을 때만 출발 요구를 인정한다.
+LEAD_DEPART_SPEED_RADAR = 0.5    # m/s, 레이더 리드 속도
+LEAD_DEPART_SPEED_VISION = 1.0   # m/s, 비전 리드는 속도 잡음이 커서 더 높게
+LEAD_DEPART_DIST_RADAR = 1.0     # m, 정차 기준거리 대비 증가량
+LEAD_DEPART_DIST_VISION = 2.0    # m, 근거리 비전 거리는 몇 m씩 튀므로 더 크게
+# 정차할 때 리드가 있었는데 사라진 경우, 이만큼 "계속" 안 보여야 리드가 떠난
+# 것으로 본다(2.0 s). 근접 정차에서 레이더·모델이 리드를 잠깐 놓치는 것만으로
+# 출발하지 않게 한다. 운전자 가속페달·RES 는 이와 무관하게 즉시 출발한다.
+LEAD_LOST_RELEASE_FRAMES = 200
 
 def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
                              v_target_1sec, brake_pressed, cruise_standstill,
@@ -87,6 +100,11 @@ class LongControl:
     self.standstill_hold_rate = 1.2
     self.standstill_latched = False
     self.standstill_frames = 0
+    # 정차 중 앞차 추적: 래치 중 리드를 본 적 있는지, 출발 판정 기준거리,
+    # 리드가 연속으로 안 보인 프레임 수.
+    self.standstill_lead_seen = False
+    self.standstill_lead_ref_d = None
+    self.standstill_lead_lost_frames = 0
     # 정차 중 실제로 걸고 있던 제동값. stopping 에 다시 들어올 때 0 부터 램프를
     # 다시 타지 않게 해서, 상태가 잠깐 흔들려도 제동이 약해지지 않는다.
     self.standstill_hold_memory = None
@@ -133,17 +151,53 @@ class LongControl:
     rate = rate_raw * 0.01 if rate_raw > 0 else self.CP.stoppingDecelRate
     self.stopping_decel_rate = float(clip(rate, 0.2, 2.0))
 
-  def _update_standstill_latch(self, active, CS, v_target, v_target_1sec, soft_hold):
+  def _reset_standstill_lead(self):
+    self.standstill_lead_seen = False
+    self.standstill_lead_ref_d = None
+    self.standstill_lead_lost_frames = 0
+
+  def _standstill_lead_allows_start(self, radar_state):
+    """정차 중 앞차 상태로 보아 플래너의 출발 요구를 받아들여도 되는지.
+
+    - 정차한 뒤 리드를 한 번도 못 봤으면(신호 대기 등) 플래너를 따른다.
+    - 리드가 보이면 실제로 멀어질 때만 허용한다. 정지거리를 메우려는
+      "간격 채우기" 요구는 여기서 막힌다.
+    - 리드를 봤는데 사라졌으면 LEAD_LOST_RELEASE_FRAMES 동안 계속 안 보일
+      때만 허용한다. 근접 정차에서 리드가 잠깐 끊기는 것을 걸러 낸다.
+    """
+    lead = radar_state.leadOne if radar_state is not None else None
+    if lead is not None and lead.status:
+      if not self.standstill_lead_seen or self.standstill_lead_ref_d is None:
+        # 처음 잡았거나 끊겼다가 다시 잡은 리드는 지금 거리를 기준으로 삼는다.
+        self.standstill_lead_ref_d = float(lead.dRel)
+      self.standstill_lead_seen = True
+      self.standstill_lead_lost_frames = 0
+      if lead.radar:
+        depart_speed, depart_dist = LEAD_DEPART_SPEED_RADAR, LEAD_DEPART_DIST_RADAR
+      else:
+        depart_speed, depart_dist = LEAD_DEPART_SPEED_VISION, LEAD_DEPART_DIST_VISION
+      return (lead.vLead > depart_speed or
+              lead.dRel - self.standstill_lead_ref_d > depart_dist)
+
+    self.standstill_lead_ref_d = None
+    if not self.standstill_lead_seen:
+      return True
+    self.standstill_lead_lost_frames += 1
+    return self.standstill_lead_lost_frames >= LEAD_LOST_RELEASE_FRAMES
+
+  def _update_standstill_latch(self, active, CS, v_target, v_target_1sec, soft_hold, radar_state=None):
     """완전 정차를 래치하고, 확정된 출발 요구에서만 푼다.
 
-    앞차 거동을 따로 판정하지 않는다. 레이더가 근접 정차에서 리드를 놓쳤다
-    잡았다 하면 출발이 들쭉날쭉해지고, 3 m 이내로 붙여 세우면 판정 자체가
-    시작되지 않기 때문이다. 대신 플래너의 출발 요구를 0.15 초 디바운스한다.
+    플래너 요구만 보던 예전 방식은 근접 정차에서 리드가 잠깐 끊기거나,
+    목표 정지거리보다 일찍 섰을 때 간격을 메우려는 요구만으로 래치가 풀려
+    앞차가 서 있는데 전진했다. 이제 앞차가 실제로 출발했는지(또는 충분히
+    오래 사라졌는지)를 함께 확인하고, 그 상태가 0.5 초 이어져야 출발한다.
     """
     if not active:
       self.standstill_latched = False
       self.standstill_frames = 0
       self.standstill_hold_memory = None
+      self._reset_standstill_lead()
       return False, False
 
     if self.long_control_state == LongCtrlState.stopping and CS.vEgo < STANDSTILL_LATCH_SPEED:
@@ -151,12 +205,17 @@ class LongControl:
 
     if not self.standstill_latched:
       self.standstill_frames = 0
+      self._reset_standstill_lead()
       return False, False
 
-    starting_request = (v_target_1sec > self.CP.vEgoStarting and
-                        v_target_1sec > v_target + 0.01 and
-                        not CS.brakePressed and
-                        not CS.cruiseState.standstill)
+    planner_start = (v_target_1sec > self.CP.vEgoStarting and
+                     v_target_1sec > v_target + 0.01 and
+                     not CS.brakePressed and
+                     not CS.cruiseState.standstill)
+    # 리드 추적은 플래너 요구와 상관없이 매 프레임 갱신해야 사라진 시간을
+    # 제대로 센다.
+    lead_allows_start = self._standstill_lead_allows_start(radar_state)
+    starting_request = planner_start and lead_allows_start
     self.standstill_frames = self.standstill_frames + 1 if starting_request else 0
 
     resume_pressed = any(
@@ -171,6 +230,7 @@ class LongControl:
       self.standstill_latched = False
       self.standstill_frames = 0
       self.standstill_hold_memory = None
+      self._reset_standstill_lead()
       return False, True
 
     return True, False
@@ -282,7 +342,7 @@ class LongControl:
 
     prev_long_control_state = self.long_control_state
     standstill_latched, standstill_release = self._update_standstill_latch(
-      active, CS, v_target, v_target_1sec, soft_hold)
+      active, CS, v_target, v_target_1sec, soft_hold, radar_state)
     self.long_control_state, planned_stop = long_control_state_trans(
       self.CP, active, self.long_control_state, CS.vEgo, v_target, v_target_1sec,
       CS.brakePressed, CS.cruiseState.standstill, soft_hold, a_target_now,
