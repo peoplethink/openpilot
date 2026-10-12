@@ -27,6 +27,7 @@ from selfdrive.controls.lib.events import Events, ET
 from selfdrive.controls.lib.cruise_helper import CruiseHelper
 from selfdrive.controls.lib.alertmanager import AlertManager, set_offroad_alert
 from selfdrive.controls.lib.vehicle_model import VehicleModel
+from selfdrive.controls.lib.lead_depart_alert import LeadDepartAlert
 from selfdrive.locationd.calibrationd import Calibration
 from selfdrive.hardware import HARDWARE, TICI, EON
 from selfdrive.manager.process_config import managed_processes
@@ -123,6 +124,7 @@ class Controls:
     # read params
     self.is_metric = params.get_bool("IsMetric")
     self.cruise_helper = CruiseHelper(params)
+    self.lead_depart_alert = LeadDepartAlert()
     self.is_ldw_enabled = params.get_bool("IsLdwEnabled")
     openpilot_enabled_toggle = params.get_bool("OpenpilotEnabledToggle")
     passive = params.get_bool("Passive") or not openpilot_enabled_toggle
@@ -448,6 +450,10 @@ class Controls:
         }
       if self.sm.rcv_frame['managerState'] and (self._not_running_processes - IGNORE_PROCESSES):
         self.events.add(EventName.processNotRunning)
+
+    # 정차 중 바로 앞차가 출발하면 한 번 알린다(오파 작동 여부 무관).
+    if self.lead_depart_alert.update(CS.vEgo, CS.gasPressed, self.sm['radarState'].leadOne):
+      self.events.add(EventName.leadCarDeparting)
 
     self.update_reverse_reengage(CS)
 

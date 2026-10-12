@@ -915,7 +915,12 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.trafficSignGreen: {
     ET.WARNING: Alert("출발합니다.", "", AlertStatus.normal, AlertSize.small,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, 3.),
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
+  },
+
+  EventName.leadCarDeparting: {
+    ET.PERMANENT: Alert("앞차가 출발했습니다.", "", AlertStatus.normal, AlertSize.small,
+      Priority.MID, VisualAlert.none, AudibleAlert.prompt, 3.),
   },
 
 }

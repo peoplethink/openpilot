@@ -151,6 +151,7 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     trafficStopping @125;
     speedBump @126;
     speedBumpSound @127;
+    leadCarDeparting @128;
   }
 }
 
