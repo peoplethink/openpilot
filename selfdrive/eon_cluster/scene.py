@@ -29,6 +29,9 @@ def _near_line_y(line, maximum_x=30.0):
 
 
 ROAD_EDGE_STD_MAX = 0.5
+# 갓길·중앙분리대 유령차로 판정 여유. navigation_noo 의
+# NavigationLaneChangeController.PHANTOM_LANE_MIN_ERROR 와 같은 값.
+PHANTOM_LANE_MIN_ERROR = 0.10
 
 
 def camera_lane_position(model):
@@ -65,8 +68,10 @@ def camera_lane_position(model):
   if not 2.5 <= lane_width <= 4.5 or road_left < lane_left or road_right > lane_right:
     return None
 
-  left_lanes = int(round(max(0.0, road_left - lane_left) / lane_width))
-  right_lanes = int(round(max(0.0, lane_right - road_right) / lane_width))
+  left_ratio = max(0.0, road_left - lane_left) / lane_width
+  right_ratio = max(0.0, lane_right - road_right) / lane_width
+  left_lanes = int(round(left_ratio))
+  right_lanes = int(round(right_ratio))
   total = 1 + left_lanes + right_lanes
   current = 1 + left_lanes
   if not 1 <= total <= 8 or not 1 <= current <= total:
@@ -76,7 +81,54 @@ def camera_lane_position(model):
     "cur": current,
     "confidence": round(inner_conf, 2),
     "laneWidth": round(lane_width, 2),
+    # 그 쪽 여유폭이 차로폭의 몇 배인지의 소수부. reconcile_lane_position 이
+    # 갓길·중앙분리대가 차로 하나로 잡혔는지 판정할 때 쓴다(NOO 와 같은 기준).
+    "leftFrac": round(left_ratio - math.floor(left_ratio), 3),
+    "rightFrac": round(right_ratio - math.floor(right_ratio), 3),
   }
+
+
+def reconcile_lane_position(lane_position, route_lane_count):
+  """카메라 차로 추정을 TMAP 차로 수에 맞춘다(HUD 표시 전용).
+
+  한국 도로는 갓길이 있어 카메라가 차로를 하나 더 세는 일이 흔하다.
+  NOO 차로 판정(NavigationLaneChangeController._resolve_current_lane)과
+  같은 규칙으로, 카메라가 정확히 하나 더 셌고 어느 쪽이 유령차로인지
+  분명할 때만 그 쪽을 빼서 현재 차로를 고친다. 판정할 수 없으면 None 을
+  돌려주고, 호출하는 쪽은 카메라 추정을 그대로 쓴다.
+  """
+  if not isinstance(lane_position, dict):
+    return None
+  try:
+    route_count = int(route_lane_count)
+    camera_count = int(lane_position.get("n", 0))
+    current = int(lane_position.get("cur", 0))
+  except (TypeError, ValueError):
+    return None
+  if not 1 <= route_count <= 8 or not 1 <= current <= camera_count:
+    return None
+
+  if camera_count == route_count:
+    resolved = current
+  elif camera_count - route_count == 1:
+    def phantom(frac):
+      return 0.5 <= frac <= 1.0 - PHANTOM_LANE_MIN_ERROR
+
+    phantom_left = phantom(_finite_float(lane_position.get("leftFrac"), 0.0))
+    phantom_right = phantom(_finite_float(lane_position.get("rightFrac"), 0.0))
+    if phantom_left == phantom_right:
+      return None
+    resolved = current - 1 if phantom_left else current
+  else:
+    return None
+
+  if not 1 <= resolved <= route_count:
+    return None
+  reconciled = dict(lane_position)
+  reconciled["n"] = route_count
+  reconciled["cur"] = resolved
+  reconciled["source"] = "route"
+  return reconciled
 
 
 def final_lateral_path(lateral_plan, model, time_indices, limit=33):
